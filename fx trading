@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TraderHub - Live Trading & Signal Engine</title>
+  <!-- Tailwind CSS for modern dark-theme styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- TradingView Lightweight Charts Library -->
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen">
+
+  <!-- Header -->
+  <header class="border-b border-gray-800 bg-gray-950 px-6 py-4 flex justify-between items-center">
+    <div class="flex items-center space-x-2">
+      <span class="text-2xl">📈</span>
+      <h1 class="text-xl font-bold tracking-wide text-green-400">TraderHub Pro</h1>
+    </div>
+    <div class="flex items-center space-x-4">
+      <span id="wsStatus" class="bg-yellow-500/10 text-yellow-400 px-3 py-1 rounded-full text-xs font-medium border border-yellow-500/20">
+         Connecting WS...
+      </span>
+      <button class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
+        Connect Account
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Grid -->
+  <main class="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Left & Center: Live Chart Section -->
+    <section class="lg:col-span-2 bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col">
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h2 class="text-lg font-semibold text-white">BTC/USDT — Live Binance Stream</h2>
+          <p class="text-xs text-gray-400">Real-time WebSocket connection to Binance API</p>
+        </div>
+        <div class="text-right">
+          <span id="livePrice" class="text-2xl font-bold text-green-400">$0.00</span>
+          <span id="priceChange" class="text-xs text-gray-400 block">--% 24h</span>
+        </div>
+      </div>
+      <!-- TradingView Chart Container -->
+      <div id="chart" class="w-full h-[450px] bg-gray-900 rounded-lg"></div>
+    </section>
+
+    <!-- Right Column: Signal Publisher & Feed -->
+    <section class="flex flex-col space-y-6">
+
+      <!-- Signal Form -->
+      <div class="bg-gray-950 border border-gray-800 rounded-xl p-4">
+        <h3 class="text-md font-semibold text-white mb-3">📢 Publish Trading Signal</h3>
+        <form id="signalForm" class="space-y-3">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Asset Pair</label>
+            <input type="text" id="pair" value="BTC/USDT" required class="w-full bg-gray-900 border border-gray-800 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Signal Type</label>
+              <select id="type" class="w-full bg-gray-900 border border-gray-800 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                <option value="BUY 🟢">BUY 🟢</option>
+                <option value="SELL 🔴">SELL 🔴</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Entry Price ($)</label>
+              <input type="number" step="0.01" id="entry" value="64200" required class="w-full bg-gray-900 border border-gray-800 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Target (TP)</label>
+              <input type="number" step="0.01" id="tp" value="66000" required class="w-full bg-gray-900 border border-gray-800 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Stop Loss (SL)</label>
+              <input type="number" step="0.01" id="sl" value="63000" required class="w-full bg-gray-900 border border-gray-800 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+            </div>
+          </div>
+
+          <!-- Optional Telegram Settings -->
+          <div class="border-t border-gray-800 pt-3 mt-2">
+            <p class="text-xs font-semibold text-gray-400 mb-2">🤖 Telegram Broadcast (Optional)</p>
+            <input type="text" id="botToken" placeholder="Bot Token (e.g., 123456:ABC...)" class="w-full bg-gray-900 border border-gray-800 rounded p-1.5 text-xs text-white mb-2 focus:outline-none focus:border-blue-500" />
+            <input type="text" id="chatId" placeholder="Chat/Channel ID (e.g., @MyChannel)" class="w-full bg-gray-900 border border-gray-800 rounded p-1.5 text-xs text-white focus:outline-none focus:border-blue-500" />
+          </div>
+
+          <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-semibold py-2 rounded-lg text-sm transition">
+            Publish Signal
+          </button>
+        </form>
+      </div>
+
+      <!-- Feed -->
+      <div class="bg-gray-950 border border-gray-800 rounded-xl p-4 flex-1">
+        <h3 class="text-md font-semibold text-white mb-3">⚡ Live Signal Feed</h3>
+        <div id="signalFeed" class="space-y-3 max-h-64 overflow-y-auto"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Application Logic -->
+  <script>
+    // 1. INITIALIZE TRADINGVIEW LIGHTWEIGHT CHART
+    const chartContainer = document.getElementById('chart');
+    const chart = LightweightCharts.createChart(chartContainer, {
+      layout: { backgroundColor: '#0B0F17', textColor: '#9CA3AF' },
+      grid: { vertLines: { color: '#1F2937' }, horzLines: { color: '#1F2937' } },
+      timeScale: { borderColor: '#374151', timeVisible: true, secondsVisible: false },
+    });
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: '#10B981', downColor: '#EF4444',
+      borderVisible: false, wickUpColor: '#10B981', wickDownColor: '#EF4444',
+    });
+
+    let currentCandle = {
